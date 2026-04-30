@@ -19,23 +19,17 @@ LOG_MODULE_REGISTER(main);
 #include <zephyr/drivers/spi.h>
 #include <zephyr/sys/util.h>
 
-#define STRIP_NODE		DT_ALIAS(led_strip)
+#define STRIP_NODE		DT_ALIAS(app_led)
 
-#if DT_NODE_HAS_PROP(DT_ALIAS(led_strip), chain_length)
-#define STRIP_NUM_PIXELS	DT_PROP(DT_ALIAS(led_strip), chain_length)
+#if DT_NODE_HAS_PROP(DT_ALIAS(app_led), chain_length)
+#define STRIP_NUM_PIXELS	DT_PROP(DT_ALIAS(app_led), chain_length)
 #else
 #error Unable to determine length of LED strip
 #endif
 
-#define DELAY_TIME K_MSEC(CONFIG_SAMPLE_LED_UPDATE_DELAY)
-
 #define RGB(_r, _g, _b) { .r = (_r), .g = (_g), .b = (_b) }
 
-static const struct led_rgb colors[] = {
-	RGB(CONFIG_SAMPLE_LED_BRIGHTNESS, 0x00, 0x00), /* red */
-	RGB(0x00, CONFIG_SAMPLE_LED_BRIGHTNESS, 0x00), /* green */
-	RGB(0x00, 0x00, CONFIG_SAMPLE_LED_BRIGHTNESS), /* blue */
-};
+static const struct led_rgb COLOR_ON = RGB(0x00, CONFIG_SAMPLE_LED_BRIGHTNESS, 0x00);
 
 static struct led_rgb pixels[STRIP_NUM_PIXELS];
 
@@ -43,7 +37,6 @@ static const struct device *const strip = DEVICE_DT_GET(STRIP_NODE);
 
 int main(void)
 {
-	size_t color = 0;
 	int rc;
 
 	if (device_is_ready(strip)) {
@@ -53,21 +46,25 @@ int main(void)
 		return 0;
 	}
 
-	LOG_INF("Displaying pattern on strip");
+	LOG_INF("Heartbeat period: %d ms", CONFIG_APP_HEARTBEAT_PERIOD_MS);
+
 	while (1) {
-		for (size_t cursor = 0; cursor < ARRAY_SIZE(pixels); cursor++) {
-			memset(&pixels, 0x00, sizeof(pixels));
-			memcpy(&pixels[cursor], &colors[color], sizeof(struct led_rgb));
-
-			rc = led_strip_update_rgb(strip, pixels, STRIP_NUM_PIXELS);
-			if (rc) {
-				LOG_ERR("couldn't update strip: %d", rc);
-			}
-
-			k_sleep(DELAY_TIME);
+		/* ON */
+		memset(pixels, 0x00, sizeof(pixels));
+		pixels[0] = COLOR_ON;
+		rc = led_strip_update_rgb(strip, pixels, STRIP_NUM_PIXELS);
+		if (rc) {
+			LOG_ERR("couldn't update strip: %d", rc);
 		}
+		k_sleep(K_MSEC(CONFIG_APP_HEARTBEAT_PERIOD_MS / 2));
 
-		color = (color + 1) % ARRAY_SIZE(colors);
+		/* OFF */
+		memset(pixels, 0x00, sizeof(pixels));
+		rc = led_strip_update_rgb(strip, pixels, STRIP_NUM_PIXELS);
+		if (rc) {
+			LOG_ERR("couldn't update strip: %d", rc);
+		}
+		k_sleep(K_MSEC(CONFIG_APP_HEARTBEAT_PERIOD_MS / 2));
 	}
 
 	return 0;
